@@ -68,9 +68,7 @@ public class LSystem : MonoBehaviour
 	{
 		LoadFromFile ();
 		
-		MeshRenderer renderer = gameObject.AddComponent<MeshRenderer> ();
-		renderer.material = new Material (Shader.Find ("Diffuse"));
-		gameObject.AddComponent<MeshFilter> ();
+		gameObject.AddComponent<BoxCollider> ();
 		
 		_update = true;
 	}
@@ -161,36 +159,17 @@ public class LSystem : MonoBehaviour
 			
 	}
 	
-	void CreateSegment (ref List<Vector3> vertices, ref List<Vector3> normals, ref List<int> indices, ref List<Vector2> uvs, Turtle turtle)
+	void CreateNewChunk (Mesh mesh)
 	{
-		/*float width = Mathf.Max (0.1f, _segmentWidth);
-		float height = Mathf.Max (0.1f, _segmentHeight);
-		
-		Vector3 topRight = turtle.direction * new Vector3 (width, height, 0);
-		Vector3 right = turtle.direction * new Vector3 (width, 0, 0);
-		Vector3 up = turtle.direction * new Vector3 (0, height, 0);
-		Vector3 bottomLeft = turtle.position - topRight;
-		
-		int c = vertices.Count;
-		
-		vertices.Add (bottomLeft);
-		vertices.Add (bottomLeft + right);
-		vertices.Add (bottomLeft + topRight);
-		vertices.Add (bottomLeft + up);
-		
-		uvs.Add (Vector2.zero);
-		uvs.Add (Vector2.right);
-		uvs.Add (new Vector2 (1, 1));
-		uvs.Add (Vector2.up);
-		
-		indices.Add (c + 1);
-		indices.Add (c);
-		indices.Add (c + 3);
-		
-		indices.Add (c + 1);
-		indices.Add (c + 3);
-		indices.Add (c + 2);*/
-		
+		GameObject chunk = new GameObject ("chunk_" + (transform.childCount + 1));
+		chunk.transform.parent = transform;
+		chunk.transform.localPosition = Vector3.zero;
+		chunk.AddComponent<MeshRenderer> ().material = new Material (Shader.Find ("Diffuse"));
+		chunk.AddComponent<MeshFilter> ().mesh = mesh;
+	}
+	
+	void CreateSegment (Turtle turtle, ref Mesh currentMesh)
+	{
 		Vector3[] newVertices;
 		Vector3[] newNormals;
 		Vector2[] newUVs;
@@ -198,29 +177,65 @@ public class LSystem : MonoBehaviour
 		
 		ProceduralMeshes.CreateCylinder (3, 3, _segmentWidth * 0.5f, _segmentHeight, out newVertices, out newNormals, out newUVs, out newIndices);
 		
-		int indexOffset = vertices.Count;
-		Vector3 vertexOffset = turtle.position - (new Vector3 (_segmentWidth, _segmentHeight, 0) * 0.5f);
+		if (currentMesh.vertices.Length + newVertices.Length > 65000) {
+			CreateNewChunk (currentMesh);
+			currentMesh = new Mesh ();
+		}
 		
+		int numVertices = currentMesh.vertices.Length + newVertices.Length;
+		int numTriangles = currentMesh.triangles.Length + newIndices.Length;
+		
+		Vector3[] vertices = new Vector3[numVertices];
+		Vector3[] normals = new Vector3[numVertices];
+		int[] indices = new int[numTriangles];
+		Vector2[] uvs = new Vector2[numVertices];
+		
+		Array.Copy (currentMesh.vertices, 0, vertices, 0, currentMesh.vertices.Length);
+		Array.Copy (currentMesh.normals, 0, normals, 0, currentMesh.normals.Length);
+		Array.Copy (currentMesh.triangles, 0, indices, 0, currentMesh.triangles.Length);
+		Array.Copy (currentMesh.uv, 0, uvs, 0, currentMesh.uv.Length);
+		
+		Vector3 vertexOffset = turtle.position - (turtle.direction * (new Vector3 (_segmentWidth, _segmentHeight, 0) * 0.5f));
+		
+		int offset = currentMesh.vertices.Length;
 		for (int i = 0; i < newVertices.Length; i++) {
 			Vector3 vertex = newVertices [i];
-			vertices.Add (vertexOffset + (turtle.direction * vertex));
+			vertices [offset + i] = vertexOffset + (turtle.direction * vertex);
 		}
 		
+		int trianglesOffset = currentMesh.vertices.Length;
+		offset = currentMesh.triangles.Length;
 		for (int i = 0; i < newIndices.Length; i++) {
 			int index = newIndices [i];
-			indices.Add (indexOffset + index);
+			indices [offset + i] = (trianglesOffset + index);
 		}
 		
-		normals.AddRange (newNormals);
-		uvs.AddRange (newUVs);
+		Array.Copy (newNormals, 0, normals, currentMesh.normals.Length, newNormals.Length);
+		Array.Copy (newUVs, 0, uvs, currentMesh.uv.Length, newUVs.Length);
+		
+		currentMesh.vertices = vertices;
+		currentMesh.normals = normals;
+		currentMesh.triangles = indices;
+		currentMesh.uv = uvs;
+		
+		currentMesh.Optimize ();
+	}
+
+	void DestroyChunks ()
+	{
+		for (int i = 0; i < transform.childCount; i++) {
+			Destroy (transform.GetChild (i).gameObject);
+		}
+		
+		transform.DetachChildren ();
 	}
 	
 	void Interpret ()
 	{
-		List<Vector3> vertices = new List<Vector3> ();
-		List<int> indices = new List<int> ();
-		List<Vector2> uvs = new List<Vector2> ();
-		List<Vector3> normals = new List<Vector3> ();
+		DestroyChunks ();
+		
+		Mesh currentMesh = new Mesh ();
+		
 		Turtle current = new Turtle (Quaternion.identity, Vector3.zero, new Vector3 (0, _segmentHeight, 0));
 		Stack<Turtle> stack = new Stack<Turtle> ();
 		for (int i = 0; i < _moduleString.Length; i++) {
@@ -228,7 +243,7 @@ public class LSystem : MonoBehaviour
 			
 			if (module == "F") {
 				current.Forward ();
-				CreateSegment (ref vertices, ref normals, ref indices, ref uvs, current);
+				CreateSegment (current, ref currentMesh);
 			} else if (module == "+") {
 				current.RotateZ (_angle);
 			} else if (module == "-") {
@@ -251,25 +266,38 @@ public class LSystem : MonoBehaviour
 			}
 		}
 		
-		if (vertices [vertices.Count - 1] != current.position) {
-			CreateSegment (ref vertices, ref normals, ref indices, ref uvs, current);
+		CreateNewChunk (currentMesh);
+		
+		UpdateColliderBounds ();
+	}
+	
+	void UpdateColliderBounds ()
+	{
+		// Calculate AABB
+		Vector3 min = new Vector3 (float.MaxValue, float.MaxValue, float.MaxValue);
+		Vector3 max = new Vector3 (float.MinValue, float.MinValue, float.MinValue);
+		for (int i = 0; i < transform.childCount; i++) {
+			Transform chunk = transform.GetChild (i);
+			min.x = Mathf.Min (min.x, chunk.renderer.bounds.min.x);
+			min.y = Mathf.Min (min.y, chunk.renderer.bounds.min.y);
+			min.z = Mathf.Min (min.z, chunk.renderer.bounds.min.z);
+			max.x = Mathf.Max (max.x, chunk.renderer.bounds.max.x);
+			max.y = Mathf.Max (max.y, chunk.renderer.bounds.max.y);
+			max.z = Mathf.Max (max.z, chunk.renderer.bounds.max.z);
 		}
 		
-		Mesh mesh = new Mesh ();
+		Bounds bounds = new Bounds ();
+		bounds.SetMinMax (min, max);
 		
-		mesh.vertices = vertices.ToArray ();
-		mesh.uv = uvs.ToArray ();
-		mesh.triangles = indices.ToArray ();
-		mesh.normals = normals.ToArray ();
-		mesh.RecalculateBounds ();
-		
-		GetComponent<MeshFilter> ().mesh = mesh;
+		BoxCollider collider = gameObject.GetComponent<BoxCollider> ();
+		collider.center = bounds.center - transform.position;
+		collider.extents = bounds.extents;
 	}
 
 	void AdjustCameraDistance ()
 	{
-		float width = renderer.bounds.extents.x * 2;
-		float height = renderer.bounds.extents.y * 2;
+		float width = collider.bounds.extents.x * 2;
+		float height = collider.bounds.extents.y * 2;
 		float size = Mathf.Sqrt (Mathf.Pow (width, 2) + Mathf.Pow (height, 2) + 1);
 		float minimumCameraDistance = (size / 2.0f) / Mathf.Tan ((Mathf.Deg2Rad * Camera.mainCamera.fov) / 2.0f);
 		minimumCameraDistance = Mathf.Min (minimumCameraDistance, Camera.mainCamera.far);
