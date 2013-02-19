@@ -29,8 +29,12 @@ public class LSystem : MonoBehaviour
 	[SerializeField]
 	private bool _useFoliage;
 	[SerializeField]
-	private GameObject _leafPrefab;
-	private Transform _chunks;
+	private Material _leafMaterial;
+	[SerializeField]
+	private float _leafSize;
+	[SerializeField]
+	private int _leafDensity;
+	private Transform _trunk;
 	private Transform _leaves;
 	private Dictionary<int, Mesh> _segmentsCache = new Dictionary<int, Mesh> ();
 	
@@ -81,11 +85,11 @@ public class LSystem : MonoBehaviour
 		
 		gameObject.AddComponent<BoxCollider> ();
 		
-		GameObject child = new GameObject ("chunks");
+		GameObject child = new GameObject ("Trunk");
 		child.transform.parent = transform;
-		_chunks = child.transform;
+		_trunk = child.transform;
 		
-		child = new GameObject ("leafs");
+		child = new GameObject ("Leaves");
 		child.transform.parent = transform;
 		_leaves = child.transform;
 		
@@ -157,16 +161,16 @@ public class LSystem : MonoBehaviour
 			
 	}
 	
-	void CreateNewChunk (Mesh mesh)
+	void CreateNewChunk (Mesh mesh, ref int count)
 	{
-		GameObject chunk = new GameObject ("chunk_" + (transform.childCount + 1));
-		chunk.transform.parent = _chunks;
+		GameObject chunk = new GameObject ("Chunk " + (++count));
+		chunk.transform.parent = _trunk;
 		chunk.transform.localPosition = Vector3.zero;
 		chunk.AddComponent<MeshRenderer> ().material = _trunkMaterial;
 		chunk.AddComponent<MeshFilter> ().mesh = mesh;
 	}
 	
-	void CreateSegment (Turtle turtle, int nestingLevel, ref Mesh currentMesh)
+	void CreateSegment (Turtle turtle, int nestingLevel, ref Mesh currentMesh, ref int chunkCount)
 	{
 		Vector3[] newVertices;
 		Vector3[] newNormals;
@@ -188,7 +192,7 @@ public class LSystem : MonoBehaviour
 		newIndices = segment.triangles;
 		
 		if (currentMesh.vertices.Length + newVertices.Length > 65000) {
-			CreateNewChunk (currentMesh);
+			CreateNewChunk (currentMesh, ref chunkCount);
 			currentMesh = new Mesh ();
 		}
 		
@@ -231,13 +235,13 @@ public class LSystem : MonoBehaviour
 		currentMesh.Optimize ();
 	}
 
-	void DestroyChunksAndLeaves ()
+	void DestroyTrunkAndLeaves ()
 	{
-		for (int i = 0; i < _chunks.childCount; i++) {
-			Destroy (_chunks.GetChild (i).gameObject);
+		for (int i = 0; i < _trunk.childCount; i++) {
+			Destroy (_trunk.GetChild (i).gameObject);
 		}
 		
-		_chunks.DetachChildren ();
+		_trunk.DetachChildren ();
 		
 		for (int i = 0; i < _leaves.childCount; i++) {
 			Destroy (_leaves.GetChild (i).gameObject);
@@ -246,28 +250,40 @@ public class LSystem : MonoBehaviour
 		_leaves.DetachChildren ();
 	}
 	
-	void AddFoliageAt (Turtle turtle)
+	void AddFoliageAt (Turtle turtle, GameObject _leafBillboard)
 	{
-		for (int i = 0; i < 2; i++) {
-			for (int j = 0; j < (2 - i) * 3; j++) {
-				Vector3 positionOffset = turtle.direction * new Vector3 (_segmentWidth * 0.5f, ((_segmentHeight * 0.25f) * (2 - i)), 0);
-				Vector3 rotationOffset = new Vector3 (0, (360 / ((2 - i) + 1)) * j, Mathf.Min (30 * (2 - i), 90));
+		for (int i = 0; i < _leafDensity; i++) {
+			for (int j = 0; j < (_leafDensity - i) * _leafDensity; j++) {
+				Vector3 positionOffset = turtle.direction * new Vector3 (_segmentWidth * 0.5f, ((_segmentHeight * 0.25f) * (_leafDensity - i)), 0);
+				Vector3 rotationOffset = new Vector3 (0, (360 / ((_leafDensity - i) + 1)) * j, Mathf.Min (30 * (_leafDensity - i), 90));
 				
-				GameObject leaf = (GameObject)Instantiate (_leafPrefab, Vector3.zero, _leafPrefab.transform.rotation * turtle.direction);
+				GameObject leaf = (GameObject)Instantiate (_leafBillboard, Vector3.zero, turtle.direction);
 				leaf.transform.parent = _leaves;
 				leaf.transform.position = turtle.position - positionOffset;
 				leaf.transform.Rotate (rotationOffset);
 			}
 		}
 	}
+
+	GameObject CreateLeafBillboard ()
+	{
+		GameObject leafBillboard = new GameObject ("Leaf");
+		leafBillboard.AddComponent<MeshRenderer> ().sharedMaterial = _leafMaterial;
+		leafBillboard.AddComponent<MeshFilter> ().sharedMesh = ProceduralMeshes.CreateXZPlane (_leafSize, _leafSize, 1, 1, new Vector3 (-_leafSize, 0, _leafSize * 0.5f));
+		return leafBillboard;
+	}
 	
 	void Interpret ()
 	{
 		_segmentsCache.Clear ();
 		
-		DestroyChunksAndLeaves ();
+		DestroyTrunkAndLeaves ();
+		
+		GameObject leafBillboard = CreateLeafBillboard ();
 		
 		Mesh currentMesh = new Mesh ();
+		
+		int chunkCount = 0;
 		
 		Turtle current = new Turtle (Quaternion.identity, Vector3.zero, new Vector3 (0, _segmentHeight, 0));
 		Stack<Turtle> stack = new Stack<Turtle> ();
@@ -276,7 +292,7 @@ public class LSystem : MonoBehaviour
 			
 			if (module == "F") {
 				current.Forward ();
-				CreateSegment (current, stack.Count, ref currentMesh);
+				CreateSegment (current, stack.Count, ref currentMesh, ref chunkCount);
 			} else if (module == "+") {
 				current.RotateZ (_angle);
 			} else if (module == "-") {
@@ -296,13 +312,15 @@ public class LSystem : MonoBehaviour
 				current = new Turtle (current);
 			} else if (module == "]") {
 				if (_useFoliage) {
-					AddFoliageAt (current);
+					AddFoliageAt (current, leafBillboard);
 				}
 				current = stack.Pop ();
 			}
 		}
 		
-		CreateNewChunk (currentMesh);
+		CreateNewChunk (currentMesh, ref chunkCount);
+		
+		Destroy (leafBillboard);
 		
 		UpdateColliderBounds ();
 	}
@@ -312,8 +330,8 @@ public class LSystem : MonoBehaviour
 		// Calculate AABB
 		Vector3 min = new Vector3 (float.MaxValue, float.MaxValue, float.MaxValue);
 		Vector3 max = new Vector3 (float.MinValue, float.MinValue, float.MinValue);
-		for (int i = 0; i < _chunks.childCount; i++) {
-			Transform chunk = _chunks.GetChild (i);
+		for (int i = 0; i < _trunk.childCount; i++) {
+			Transform chunk = _trunk.GetChild (i);
 			min.x = Mathf.Min (min.x, chunk.renderer.bounds.min.x);
 			min.y = Mathf.Min (min.y, chunk.renderer.bounds.min.y);
 			min.z = Mathf.Min (min.z, chunk.renderer.bounds.min.z);
