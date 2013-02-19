@@ -32,6 +32,7 @@ public class LSystem : MonoBehaviour
 	private GameObject _leafPrefab;
 	private Transform _chunks;
 	private Transform _leaves;
+	private Dictionary<int, Mesh> _segmentsCache = new Dictionary<int, Mesh> ();
 	
 	private struct Turtle
 	{
@@ -161,7 +162,7 @@ public class LSystem : MonoBehaviour
 		GameObject chunk = new GameObject ("chunk_" + (transform.childCount + 1));
 		chunk.transform.parent = _chunks;
 		chunk.transform.localPosition = Vector3.zero;
-		chunk.AddComponent<MeshRenderer> ().material = _trunkMaterial; //new Material (Shader.Find ("Diffuse"));
+		chunk.AddComponent<MeshRenderer> ().material = _trunkMaterial;
 		chunk.AddComponent<MeshFilter> ().mesh = mesh;
 	}
 	
@@ -172,9 +173,19 @@ public class LSystem : MonoBehaviour
 		Vector2[] newUVs;
 		int[] newIndices;
 		
-		float thickness = (_narrowBranches) ? _segmentWidth * (0.5f / (nestingLevel + 1)) : _segmentWidth * 0.5f;
+		Mesh segment;
+		if (_segmentsCache.ContainsKey (nestingLevel)) {
+			segment = _segmentsCache [nestingLevel];
+		} else {
+			float thickness = (_narrowBranches) ? _segmentWidth * (0.5f / (nestingLevel + 1)) : _segmentWidth * 0.5f;
+			segment = ProceduralMeshes.CreateCylinder (3, 3, thickness, _segmentHeight);
+			_segmentsCache [nestingLevel] = segment;
+		}
 		
-		ProceduralMeshes.CreateCylinder (3, 3, thickness, _segmentHeight, out newVertices, out newNormals, out newUVs, out newIndices);
+		newVertices = segment.vertices;
+		newNormals = segment.normals;
+		newUVs = segment.uv;
+		newIndices = segment.triangles;
 		
 		if (currentMesh.vertices.Length + newVertices.Length > 65000) {
 			CreateNewChunk (currentMesh);
@@ -252,6 +263,8 @@ public class LSystem : MonoBehaviour
 	
 	void Interpret ()
 	{
+		_segmentsCache.Clear ();
+		
 		DestroyChunksAndLeaves ();
 		
 		Mesh currentMesh = new Mesh ();
