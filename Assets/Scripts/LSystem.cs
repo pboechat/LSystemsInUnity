@@ -15,13 +15,13 @@ public class LSystem : MonoBehaviour
 	[SerializeField]
 	private int _numberOfDerivations = 0;
 	private Dictionary<string, ProductionRule> _productionRules = new Dictionary<string, ProductionRule> ();
-	[SerializeField]
 	private string _moduleString;
 	[SerializeField]
 	private float _segmentWidth;
 	[SerializeField]
 	private float _segmentHeight;
-	private Mesh _mesh;
+	[SerializeField]
+	private bool _update;
 	
 	private struct Turtle
 	{
@@ -48,14 +48,19 @@ public class LSystem : MonoBehaviour
 			position += direction * step;
 		}
 		
-		public void RotateLeft (float angle)
+		public void RotateX (float angle)
 		{
-			direction *= Quaternion.Euler (0, 0, angle);
+			direction *= Quaternion.Euler (angle, 0, 0);
 		}
 		
-		public void RotateRight (float angle)
+		public void RotateY (float angle)
 		{
-			direction *= Quaternion.Euler (0, 0, -angle);
+			direction *= Quaternion.Euler (0, angle, 0);
+		}
+		
+		public void RotateZ (float angle)
+		{
+			direction *= Quaternion.Euler (0, 0, angle);
 		}
 	}
 	
@@ -65,9 +70,9 @@ public class LSystem : MonoBehaviour
 		
 		MeshRenderer renderer = gameObject.AddComponent<MeshRenderer> ();
 		renderer.material = new Material (Shader.Find ("Diffuse"));
-		MeshFilter filter = gameObject.AddComponent<MeshFilter> ();
-		_mesh = new Mesh ();
-		filter.mesh = _mesh;
+		gameObject.AddComponent<MeshFilter> ();
+		
+		_update = true;
 	}
 	
 	void LoadFromFile ()
@@ -156,31 +161,58 @@ public class LSystem : MonoBehaviour
 			
 	}
 	
-	void CreateSegment (ref List<Vector3> vertices, ref List<int> indices, ref List<Vector2> uvs, Turtle turtle)
+	void CreateSegment (ref List<Vector3> vertices, ref List<Vector3> normals, ref List<int> indices, ref List<Vector2> uvs, Turtle turtle)
 	{
-		float halfWidth = Mathf.Max (0.1f, _segmentWidth) * 0.5f;
-		float halfHeight = Mathf.Max (0.1f, _segmentHeight) * 0.5f;
+		/*float width = Mathf.Max (0.1f, _segmentWidth);
+		float height = Mathf.Max (0.1f, _segmentHeight);
 		
-		Vector3 position = turtle.position;
+		Vector3 topRight = turtle.direction * new Vector3 (width, height, 0);
+		Vector3 right = turtle.direction * new Vector3 (width, 0, 0);
+		Vector3 up = turtle.direction * new Vector3 (0, height, 0);
+		Vector3 bottomLeft = turtle.position - topRight;
 		
 		int c = vertices.Count;
 		
-		vertices.Add (position);
-		vertices.Add (position + (turtle.direction * new Vector3 (halfWidth, halfHeight, 0)));
-		vertices.Add (turtle.position + (turtle.direction * new Vector3 (halfWidth, 0, 0)));
-		vertices.Add (turtle.position + (turtle.direction * new Vector3 (0, halfHeight, 0)));
+		vertices.Add (bottomLeft);
+		vertices.Add (bottomLeft + right);
+		vertices.Add (bottomLeft + topRight);
+		vertices.Add (bottomLeft + up);
 		
 		uvs.Add (Vector2.zero);
-		uvs.Add (new Vector2 (1, 1));
 		uvs.Add (Vector2.right);
+		uvs.Add (new Vector2 (1, 1));
 		uvs.Add (Vector2.up);
 		
-		indices.Add (c);
 		indices.Add (c + 1);
-		indices.Add (c + 2);
 		indices.Add (c);
 		indices.Add (c + 3);
+		
 		indices.Add (c + 1);
+		indices.Add (c + 3);
+		indices.Add (c + 2);*/
+		
+		Vector3[] newVertices;
+		Vector3[] newNormals;
+		Vector2[] newUVs;
+		int[] newIndices;
+		
+		ProceduralMeshes.CreateCylinder (3, 3, _segmentWidth * 0.5f, _segmentHeight, out newVertices, out newNormals, out newUVs, out newIndices);
+		
+		int indexOffset = vertices.Count;
+		Vector3 vertexOffset = turtle.position - (new Vector3 (_segmentWidth, _segmentHeight, 0) * 0.5f);
+		
+		for (int i = 0; i < newVertices.Length; i++) {
+			Vector3 vertex = newVertices [i];
+			vertices.Add (vertexOffset + (turtle.direction * vertex));
+		}
+		
+		for (int i = 0; i < newIndices.Length; i++) {
+			int index = newIndices [i];
+			indices.Add (indexOffset + index);
+		}
+		
+		normals.AddRange (newNormals);
+		uvs.AddRange (newUVs);
 	}
 	
 	void Interpret ()
@@ -188,40 +220,69 @@ public class LSystem : MonoBehaviour
 		List<Vector3> vertices = new List<Vector3> ();
 		List<int> indices = new List<int> ();
 		List<Vector2> uvs = new List<Vector2> ();
+		List<Vector3> normals = new List<Vector3> ();
 		Turtle current = new Turtle (Quaternion.identity, Vector3.zero, new Vector3 (0, _segmentHeight, 0));
-		Queue<Turtle> stack = new Queue<Turtle> ();
+		Stack<Turtle> stack = new Stack<Turtle> ();
 		for (int i = 0; i < _moduleString.Length; i++) {
 			string module = _moduleString [i] + "";
 			
 			if (module == "F") {
 				current.Forward ();
-				CreateSegment (ref vertices, ref indices, ref uvs, current);
+				CreateSegment (ref vertices, ref normals, ref indices, ref uvs, current);
 			} else if (module == "+") {
-				current.RotateLeft (_angle);
+				current.RotateZ (_angle);
 			} else if (module == "-") {
-				current.RotateRight (_angle);
+				current.RotateZ (-_angle);
+			} else if (module == "&") {
+				current.RotateX (_angle);
+			} else if (module == "^") {
+				current.RotateX (-_angle);
+			} else if (module == "\\") {
+				current.RotateY (_angle);
+			} else if (module == "/") {
+				current.RotateY (-_angle);
+			} else if (module == "|") {
+				current.RotateZ (180);
 			} else if (module == "[") {
-				stack.Enqueue (current);
+				stack.Push (current);
 				current = new Turtle (current);
 			} else if (module == "]") {
-				current = stack.Dequeue ();
+				current = stack.Pop ();
 			}
 		}
 		
 		if (vertices [vertices.Count - 1] != current.position) {
-			CreateSegment (ref vertices, ref indices, ref uvs, current);
+			CreateSegment (ref vertices, ref normals, ref indices, ref uvs, current);
 		}
 		
-		_mesh.vertices = vertices.ToArray ();
-		_mesh.uv = uvs.ToArray ();
-		_mesh.triangles = indices.ToArray ();
-		_mesh.normals = Arrays.New<Vector3> (Vector3.forward * -1, vertices.Count);
-		_mesh.RecalculateBounds ();
+		Mesh mesh = new Mesh ();
+		
+		mesh.vertices = vertices.ToArray ();
+		mesh.uv = uvs.ToArray ();
+		mesh.triangles = indices.ToArray ();
+		mesh.normals = normals.ToArray ();
+		mesh.RecalculateBounds ();
+		
+		GetComponent<MeshFilter> ().mesh = mesh;
+	}
+
+	void AdjustCameraDistance ()
+	{
+		float width = renderer.bounds.extents.x * 2;
+		float height = renderer.bounds.extents.y * 2;
+		float size = Mathf.Sqrt (Mathf.Pow (width, 2) + Mathf.Pow (height, 2) + 1);
+		float minimumCameraDistance = (size / 2.0f) / Mathf.Tan ((Mathf.Deg2Rad * Camera.mainCamera.fov) / 2.0f);
+		minimumCameraDistance = Mathf.Min (minimumCameraDistance, Camera.mainCamera.far);
+		Camera.mainCamera.transform.position = new Vector3 (0, 0, -minimumCameraDistance);
 	}
 	
 	void Update ()
 	{
-		Derive ();
-		Interpret ();
+		if (_update) {
+			Derive ();
+			Interpret ();
+			AdjustCameraDistance ();
+			_update = false;
+		}
 	}
 }
