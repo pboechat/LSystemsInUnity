@@ -14,14 +14,24 @@ public class LSystem : MonoBehaviour
 	private float _angle = 0;
 	[SerializeField]
 	private int _numberOfDerivations = 0;
-	private Dictionary<string, ProductionRule> _productionRules = new Dictionary<string, ProductionRule> ();
+	[SerializeField]
+	private bool _narrowBranches = true;
+	private ProductionRules _productionRules = new ProductionRules ();
 	private string _moduleString;
 	[SerializeField]
 	private float _segmentWidth;
 	[SerializeField]
 	private float _segmentHeight;
 	[SerializeField]
+	private Material _trunkMaterial;
+	[SerializeField]
 	private bool _update;
+	[SerializeField]
+	private bool _useFoliage;
+	[SerializeField]
+	private GameObject _leafPrefab;
+	private Transform _chunks;
+	private Transform _leaves;
 	
 	private struct Turtle
 	{
@@ -70,6 +80,14 @@ public class LSystem : MonoBehaviour
 		
 		gameObject.AddComponent<BoxCollider> ();
 		
+		GameObject child = new GameObject ("chunks");
+		child.transform.parent = transform;
+		_chunks = child.transform;
+		
+		child = new GameObject ("leafs");
+		child.transform.parent = transform;
+		_leaves = child.transform;
+		
 		_update = true;
 	}
 	
@@ -108,34 +126,13 @@ public class LSystem : MonoBehaviour
 				_numberOfDerivations = int.Parse (value);
 			} else {
 				ProductionRule productionRule = ProductionRule.Build (line);
-				_productionRules [productionRule.predecessor] = productionRule;
+				_productionRules.Add (productionRule);
 			}
 		}
 		
-		if (!CheckProductionRulesProbabilities ()) {
+		if (!_productionRules.CheckProbabilities ()) {
 			throw new Exception ("There's one of more production rules with probability < 1");
 		}
-	}
-	
-	bool CheckProductionRulesProbabilities ()
-	{
-		Dictionary<string, float> predecessorsProbability = new Dictionary<string, float> ();
-
-		foreach (ProductionRule productionRule in _productionRules.Values) {
-			if (predecessorsProbability.ContainsKey (productionRule.predecessor)) {
-				predecessorsProbability [productionRule.predecessor] += productionRule.probability;
-			} else {
-				predecessorsProbability [productionRule.predecessor] = productionRule.probability;
-			}
-		}
-	
-		foreach (float probability in predecessorsProbability.Values) {
-			if (probability != 1) {
-				return false;
-			}
-		}
-	
-		return true;
 	}
 	
 	void Derive ()
@@ -146,12 +143,12 @@ public class LSystem : MonoBehaviour
 			for (int j = 0; j < _moduleString.Length; j++) {
 				string module = _moduleString [j] + "";
 				
-				if (!_productionRules.ContainsKey (module)) {
+				if (!_productionRules.Contains (module)) {
 					newModuleString += module;
 					continue;
 				}
 				
-				ProductionRule productionRule = _productionRules [module];
+				ProductionRule productionRule = _productionRules.Get (module);
 				newModuleString += productionRule.successor;
 			}
 			_moduleString = newModuleString;
@@ -162,20 +159,22 @@ public class LSystem : MonoBehaviour
 	void CreateNewChunk (Mesh mesh)
 	{
 		GameObject chunk = new GameObject ("chunk_" + (transform.childCount + 1));
-		chunk.transform.parent = transform;
+		chunk.transform.parent = _chunks;
 		chunk.transform.localPosition = Vector3.zero;
-		chunk.AddComponent<MeshRenderer> ().material = new Material (Shader.Find ("Diffuse"));
+		chunk.AddComponent<MeshRenderer> ().material = _trunkMaterial; //new Material (Shader.Find ("Diffuse"));
 		chunk.AddComponent<MeshFilter> ().mesh = mesh;
 	}
 	
-	void CreateSegment (Turtle turtle, ref Mesh currentMesh)
+	void CreateSegment (Turtle turtle, int nestingLevel, ref Mesh currentMesh)
 	{
 		Vector3[] newVertices;
 		Vector3[] newNormals;
 		Vector2[] newUVs;
 		int[] newIndices;
 		
-		ProceduralMeshes.CreateCylinder (3, 3, _segmentWidth * 0.5f, _segmentHeight, out newVertices, out newNormals, out newUVs, out newIndices);
+		float thickness = (_narrowBranches) ? _segmentWidth * (0.5f / (nestingLevel + 1)) : _segmentWidth * 0.5f;
+		
+		ProceduralMeshes.CreateCylinder (3, 3, thickness, _segmentHeight, out newVertices, out newNormals, out newUVs, out newIndices);
 		
 		if (currentMesh.vertices.Length + newVertices.Length > 65000) {
 			CreateNewChunk (currentMesh);
@@ -221,18 +220,39 @@ public class LSystem : MonoBehaviour
 		currentMesh.Optimize ();
 	}
 
-	void DestroyChunks ()
+	void DestroyChunksAndLeaves ()
 	{
-		for (int i = 0; i < transform.childCount; i++) {
-			Destroy (transform.GetChild (i).gameObject);
+		for (int i = 0; i < _chunks.childCount; i++) {
+			Destroy (_chunks.GetChild (i).gameObject);
 		}
 		
-		transform.DetachChildren ();
+		_chunks.DetachChildren ();
+		
+		for (int i = 0; i < _leaves.childCount; i++) {
+			Destroy (_leaves.GetChild (i).gameObject);
+		}
+		
+		_leaves.DetachChildren ();
+	}
+	
+	void AddFoliageAt (Turtle turtle)
+	{
+		for (int i = 0; i < 2; i++) {
+			for (int j = 0; j < (2 - i) * 3; j++) {
+				Vector3 positionOffset = turtle.direction * new Vector3 (_segmentWidth * 0.5f, ((_segmentHeight * 0.25f) * (2 - i)), 0);
+				Vector3 rotationOffset = new Vector3 (0, (360 / ((2 - i) + 1)) * j, Mathf.Min (30 * (2 - i), 90));
+				
+				GameObject leaf = (GameObject)Instantiate (_leafPrefab, Vector3.zero, _leafPrefab.transform.rotation * turtle.direction);
+				leaf.transform.parent = _leaves;
+				leaf.transform.position = turtle.position - positionOffset;
+				leaf.transform.Rotate (rotationOffset);
+			}
+		}
 	}
 	
 	void Interpret ()
 	{
-		DestroyChunks ();
+		DestroyChunksAndLeaves ();
 		
 		Mesh currentMesh = new Mesh ();
 		
@@ -243,7 +263,7 @@ public class LSystem : MonoBehaviour
 			
 			if (module == "F") {
 				current.Forward ();
-				CreateSegment (current, ref currentMesh);
+				CreateSegment (current, stack.Count, ref currentMesh);
 			} else if (module == "+") {
 				current.RotateZ (_angle);
 			} else if (module == "-") {
@@ -262,6 +282,9 @@ public class LSystem : MonoBehaviour
 				stack.Push (current);
 				current = new Turtle (current);
 			} else if (module == "]") {
+				if (_useFoliage) {
+					AddFoliageAt (current);
+				}
 				current = stack.Pop ();
 			}
 		}
@@ -276,8 +299,8 @@ public class LSystem : MonoBehaviour
 		// Calculate AABB
 		Vector3 min = new Vector3 (float.MaxValue, float.MaxValue, float.MaxValue);
 		Vector3 max = new Vector3 (float.MinValue, float.MinValue, float.MinValue);
-		for (int i = 0; i < transform.childCount; i++) {
-			Transform chunk = transform.GetChild (i);
+		for (int i = 0; i < _chunks.childCount; i++) {
+			Transform chunk = _chunks.GetChild (i);
 			min.x = Mathf.Min (min.x, chunk.renderer.bounds.min.x);
 			min.y = Mathf.Min (min.y, chunk.renderer.bounds.min.y);
 			min.z = Mathf.Min (min.z, chunk.renderer.bounds.min.z);
@@ -294,14 +317,17 @@ public class LSystem : MonoBehaviour
 		collider.extents = bounds.extents;
 	}
 
-	void AdjustCameraDistance ()
+	void AdjustCamera ()
 	{
+		BoxCollider collider = gameObject.GetComponent<BoxCollider> ();
 		float width = collider.bounds.extents.x * 2;
 		float height = collider.bounds.extents.y * 2;
 		float size = Mathf.Sqrt (Mathf.Pow (width, 2) + Mathf.Pow (height, 2) + 1);
 		float minimumCameraDistance = (size / 2.0f) / Mathf.Tan ((Mathf.Deg2Rad * Camera.mainCamera.fov) / 2.0f);
 		minimumCameraDistance = Mathf.Min (minimumCameraDistance, Camera.mainCamera.far);
-		Camera.mainCamera.transform.position = new Vector3 (0, 0, -minimumCameraDistance);
+		
+		// Adjusting camera center and distance
+		Camera.mainCamera.transform.position = new Vector3 (collider.center.x, collider.center.y, -minimumCameraDistance);
 	}
 	
 	void Update ()
@@ -309,7 +335,7 @@ public class LSystem : MonoBehaviour
 		if (_update) {
 			Derive ();
 			Interpret ();
-			AdjustCameraDistance ();
+			AdjustCamera ();
 			_update = false;
 		}
 	}
