@@ -2,6 +2,6 @@
 
 axiom=F--F--F
 angle=60
-number of derivations=5
+number of derivations=3
 
 F=(1)F+F--F+F

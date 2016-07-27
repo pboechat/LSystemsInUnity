@@ -1,10 +1,8 @@
-using UnityEngine;
 using System.Collections.Generic;
 using System;
 
-public class ProductionRules
+public class ProductionRuleSet
 {
-	
 	private Dictionary<string, List<ProductionRule>> _lookupTable = new Dictionary<string, List<ProductionRule>> ();
 	
 	public void Add (ProductionRule productionRule)
@@ -24,7 +22,7 @@ public class ProductionRules
 		return _lookupTable.ContainsKey (module);
 	}
 	
-	public ProductionRule Get (string module)
+	public ProductionRule Match (string module)
 	{
 		if (!_lookupTable.ContainsKey (module)) {
 			return null;
