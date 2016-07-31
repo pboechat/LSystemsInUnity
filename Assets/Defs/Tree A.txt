@@ -1,0 +1,7 @@
+// tree A (pg. 25)
+
+axiom=F
+angle=25.7
+number of derivations=4
+
+F=(1)F[+F]F[-F]F

@@ -1,59 +1,63 @@
 using UnityEngine;
+using System.Collections.Generic;
 
 public class LSystemExecutor : MonoBehaviour
 {
-	[SerializeField]
-	private TextAsset file;
     [SerializeField]
-    private int segmentAxisSamples = 3;
+    private TextAsset file;
+    [SerializeField]
+    private int segmentAxialSamples = 3;
     [SerializeField]
     private int segmentRadialSamples = 3;
     [SerializeField]
-	private float segmentWidth;
-	[SerializeField]
-	private float segmentHeight;
-	[SerializeField]
-	private float leafSize;
-	[SerializeField]
-	private int leafDensity;
-	[SerializeField]
-	private bool useFoliage;
+    private float segmentWidth;
+    [SerializeField]
+    private float segmentHeight;
+    [SerializeField]
+    private float leafSize;
+    [SerializeField]
+    private int leafAxialDensity = 1;
+    [SerializeField]
+    private int leafRadialDensity = 1;
+    [SerializeField]
+    private bool useFoliage;
     [SerializeField]
     private bool narrowBranches = true;
     [SerializeField]
-	private Material trunkMaterial;
-	[SerializeField]
-	private Material leafMaterial;
-	
-	void Start ()
-	{
+    private Material trunkMaterial;
+    [SerializeField]
+    private Material leafMaterial;
+
+    void Start()
+    {
         string axiom;
         float angle;
         int derivations;
-        ProductionRuleSet rules;
-		LSystemParser.LoadFromString(
-            file.text, 
-            out axiom, 
-            out angle, 
-            out derivations, 
-            out rules);
+        Dictionary<string, List<Production>> productions;
+        LSystemParser.Parse(
+            file.text,
+            out axiom,
+            out angle,
+            out derivations,
+            out productions);
 
         string moduleString;
         LSystemDeriver.Derive(
-            axiom, 
-            angle, 
-            derivations, 
-            rules, 
+            axiom,
+            angle,
+            derivations,
+            productions,
             out moduleString);
 
-        GameObject leaves, trunk; 
+        GameObject leaves, trunk;
         LSystemInterpreter.Interpret(
-            segmentAxisSamples,
+            segmentAxialSamples,
             segmentRadialSamples,
             segmentWidth,
             segmentHeight,
             leafSize,
-            leafDensity,
+            leafAxialDensity,
+            leafRadialDensity,
             useFoliage,
             narrowBranches,
             leafMaterial,
@@ -69,7 +73,7 @@ public class LSystemExecutor : MonoBehaviour
         trunk.transform.localPosition = Vector3.zero;
 
         UpdateColliderBounds(trunk);
-	}
+    }
 
     void UpdateColliderBounds(GameObject trunk)
     {

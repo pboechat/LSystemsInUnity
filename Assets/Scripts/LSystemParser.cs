@@ -1,15 +1,14 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 
 public static class LSystemParser
 {
-    public static void LoadFromString(string content, out string axiom, out float angle, out int derivations, out ProductionRuleSet rules)
+    public static void Parse(string content, out string axiom, out float angle, out int derivations, out Dictionary<string, List<Production>> productions)
     {
         axiom = "";
         angle = 0;
         derivations = 0;
-        rules = new ProductionRuleSet();
+        productions = new Dictionary<string, List<Production>>();
         var lines = content.Split('\n');
         foreach (string rawLine in lines)
         {
@@ -41,12 +40,20 @@ public static class LSystemParser
             }
             else
             {
-                ProductionRule productionRule = ProductionRule.Build(line);
-                rules.Add(productionRule);
+                string[] tokens = line.Split('=');
+                if (tokens.Length != 2)
+                    continue;
+                string predecessor = tokens[0].Trim();
+                tokens = tokens[1].Trim().Split(')');
+                string probabilityString = tokens[0].Substring(1);
+                string successor = tokens[1];
+                float probability = float.Parse(probabilityString);
+                if (!productions.ContainsKey(predecessor))
+                    productions[predecessor] = new List<Production>();
+                productions[predecessor].Add(new Production(predecessor, successor, probability));
             }
         }
-
-        if (!rules.CheckProbabilities())
+        if (!ProductionMatcher.CheckProbabilities(productions))
             throw new Exception("There's one of more production rules with probability < 1");
     }
 

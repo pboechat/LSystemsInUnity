@@ -51,14 +51,13 @@ public static class LSystemInterpreter
         int segmentRadialSamples,
         float segmentWidth,
         float segmentHeight,
-        int leafDensity,
         bool narrowBranches,
         Material trunkMaterial,
-        Turtle turtle, 
-        int nestingLevel, 
-        ref Mesh currentMesh, 
-        ref int chunkCount, 
-        GameObject trunk, 
+        Turtle turtle,
+        int nestingLevel,
+        ref Mesh currentMesh,
+        ref int chunkCount,
+        GameObject trunk,
         Dictionary<int, Mesh> segmentsCache)
     {
         Vector3[] newVertices;
@@ -100,22 +99,14 @@ public static class LSystemInterpreter
         Array.Copy(currentMesh.triangles, 0, indices, 0, currentMesh.triangles.Length);
         Array.Copy(currentMesh.uv, 0, uvs, 0, currentMesh.uv.Length);
 
-        Vector3 vertexOffset = turtle.position - (turtle.direction * (new Vector3(segmentWidth, segmentHeight, 0) * 0.5f));
-
         int offset = currentMesh.vertices.Length;
         for (int i = 0; i < newVertices.Length; i++)
-        {
-            Vector3 vertex = newVertices[i];
-            vertices[offset + i] = vertexOffset + (turtle.direction * vertex);
-        }
+            vertices[offset + i] = turtle.position + (turtle.direction * newVertices[i]);
 
         int trianglesOffset = currentMesh.vertices.Length;
         offset = currentMesh.triangles.Length;
         for (int i = 0; i < newIndices.Length; i++)
-        {
-            int index = newIndices[i];
-            indices[offset + i] = (trianglesOffset + index);
-        }
+            indices[offset + i] = (trianglesOffset + newIndices[i]);
 
         Array.Copy(newNormals, 0, normals, currentMesh.normals.Length, newNormals.Length);
         Array.Copy(newUVs, 0, uvs, currentMesh.uv.Length, newUVs.Length);
@@ -129,24 +120,28 @@ public static class LSystemInterpreter
     }
 
     static void AddFoliageAt(
-        float segmentWidth, 
-        float segmentHeight, 
-        int leafDensity, 
-        Turtle turtle, 
-        GameObject leafBillboard, 
+        float segmentWidth,
+        float segmentHeight,
+        int leafAxialDensity,
+        int leafRadialDensity,
+        Turtle turtle,
+        GameObject leafBillboard,
         GameObject leaves)
     {
-        for (int i = 0; i < leafDensity; i++)
+        float xAngleStep = -70 / (float)leafAxialDensity,
+            xAngle = xAngleStep * (leafAxialDensity - 1) - 20,
+            yAngle = 0,
+            yAngleStep = 360 / (float)leafRadialDensity,
+            y = 0,
+            yStep = -segmentHeight / (float)leafAxialDensity;
+        for (int i = 0; i < leafAxialDensity; i++, xAngle -= xAngleStep, y -= yStep)
         {
-            for (int j = 0; j < (leafDensity - i) * leafDensity; j++)
+            for (int j = 0; j < leafRadialDensity; j++, yAngle += yAngleStep)
             {
-                Vector3 positionOffset = turtle.direction * new Vector3(segmentWidth * 0.5f, ((segmentHeight * 0.25f) * (leafDensity - i)), 0);
-                Vector3 rotationOffset = new Vector3(0, (360 / ((leafDensity - i) + 1)) * j, Mathf.Min(30 * (leafDensity - i), 90));
-
                 GameObject leaf = (GameObject)GameObject.Instantiate(leafBillboard, Vector3.zero, turtle.direction);
                 leaf.transform.parent = leaves.transform;
-                leaf.transform.position = turtle.position - positionOffset;
-                leaf.transform.Rotate(rotationOffset);
+                leaf.transform.position = turtle.position - (turtle.direction * new Vector3(0, y, 0));
+                leaf.transform.Rotate(new Vector3(xAngle, yAngle, 0));
             }
         }
     }
@@ -174,14 +169,15 @@ public static class LSystemInterpreter
         float segmentWidth,
         float segmentHeight,
         float leafSize,
-        int leafDensity,
+        int leafAxialDensity,
+        int leafRadialDensity,
         bool useFoliage,
         bool narrowBranches,
         Material leafMaterial,
         Material trunkMaterial,
-        float angle, 
-        string moduleString, 
-        out GameObject leaves, 
+        float angle,
+        string moduleString,
+        out GameObject leaves,
         out GameObject trunk)
     {
         leaves = new GameObject("Leaves");
@@ -197,24 +193,22 @@ public static class LSystemInterpreter
         for (int i = 0; i < moduleString.Length; i++)
         {
             string module = moduleString[i] + "";
-
             if (module == "F")
             {
-                current.Forward();
                 CreateSegment(
                     segmentAxisSamples,
                     segmentRadialSamples,
                     segmentWidth,
                     segmentHeight,
-                    leafDensity,
                     narrowBranches,
                     trunkMaterial,
-                    current, 
-                    stack.Count, 
-                    ref currentMesh, 
-                    ref chunkCount, 
-                    trunk, 
+                    current,
+                    stack.Count,
+                    ref currentMesh,
+                    ref chunkCount,
+                    trunk,
                     segmentsCache);
+                current.Forward();
             }
             else if (module == "+")
             {
@@ -252,13 +246,17 @@ public static class LSystemInterpreter
             else if (module == "]")
             {
                 if (useFoliage)
-                {
-                    AddFoliageAt(segmentWidth, segmentHeight, leafDensity, current, leafBillboard, leaves);
-                }
+                    AddFoliageAt(
+                        segmentWidth,
+                        segmentHeight,
+                        leafAxialDensity,
+                        leafRadialDensity,
+                        current,
+                        leafBillboard,
+                        leaves);
                 current = stack.Pop();
             }
         }
-
         CreateNewChunk(currentMesh, ref chunkCount, trunkMaterial, trunk);
         GameObject.Destroy(leafBillboard);
     }
