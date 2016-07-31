@@ -21,7 +21,7 @@ Add LSystemExecutor to a game object in your scene. Set a L-System definition (i
 
 ![enter image description here](http://www.pedroboechat.com/images/LSystemOnUnity1.png)
 
-![enter image description here](http://www.pedroboechat.com/images/LSystemOnUnity3.png)
+![enter image description here](http://www.pedroboechat.com/images/LSystemOnUnity2.png)
 
 ----------
 
