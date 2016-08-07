@@ -1,7 +1,7 @@
 L-Systems On Unity
 ================
 
-L-System is a rewriting system used mainly to model the development of plants. L-Systems on Unity enables you to rapidly create plants for your games.
+L-System is a rewriting system used mainly to model the development of plants. L-Systems on Unity enables you to rapidly create plants for your Unity3D games.
 
 
 ----------
