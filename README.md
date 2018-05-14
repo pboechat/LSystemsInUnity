@@ -19,9 +19,9 @@ Add LSystemExecutor to a game object in your scene. Set a L-System definition (i
 		F=(1)F[-&^F][^++&F]||F[--&^F][+&F]
 
 
-![enter image description here](http://www.pedroboechat.com/images/LSystemOnUnity1.png)
+![LSystemExecutor in object inspector](http://www.pedroboechat.com/images/LSystemOnUnity1.png)
 
-![enter image description here](http://www.pedroboechat.com/images/LSystemOnUnity-3D-Tree-1.png)
+![3D tree](http://www.pedroboechat.com/images/LSystemOnUnity2.png)
 
 ----------
 
@@ -53,15 +53,15 @@ Example:
 
 
 		string axiom;
-        float angle;
-        int derivations;
-        Dictionary<string, List<Production>> productions;
-        LSystemParser.Parse(
-            file.text,
-            out axiom,
-            out angle,
-            out derivations,
-            out productions);
+		float angle;
+		int derivations;
+		Dictionary<string, List<Production>> productions;
+		LSystemParser.Parse(
+				file.text,
+				out axiom,
+				out angle,
+				out derivations,
+				out productions);
 
 
 ----------
@@ -86,12 +86,12 @@ Output:
 Example:
 
 		string moduleString;
-        LSystemDeriver.Derive(
-            axiom,
-            angle,
-            derivations,
-            rules,
-            out moduleString);
+		LSystemDeriver.Derive(
+				axiom,
+				angle,
+				derivations,
+				rules,
+				out moduleString);
 
 
 ----------
@@ -104,8 +104,8 @@ Method:
 
 Input:
 
- - # segment axial samplers [int]
- - # segment radial samplers [int]
+ - num. segment axial samplers [int]
+ - num. segment radial samplers [int]
  - segment width [float]
  - segment height [float]
  - leaf size [float]
@@ -125,22 +125,23 @@ Output:
 
 Example:
 
+
 		GameObject leaves, trunk;
-        LSystemInterpreter.Interpret(
-            segmentAxialSamples,
-            segmentRadialSamples,
-            segmentWidth,
-            segmentHeight,
-            leafSize,
-            leafAxialDensity,
-            leafRadialDensity,
-            useFoliage,
-            narrowBranches,
-            leafMaterial,
-            trunkMaterial,
-            angle,
-            moduleString,
-            out leaves,
-            out trunk);
+		LSystemInterpreter.Interpret(
+				segmentAxialSamples,
+				segmentRadialSamples,
+				segmentWidth,
+				segmentHeight,
+				leafSize,
+				leafAxialDensity,
+				leafRadialDensity,
+				useFoliage,
+				narrowBranches,
+				leafMaterial,
+				trunkMaterial,
+				angle,
+				moduleString,
+				out leaves,
+				out trunk);
             
   
