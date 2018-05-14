@@ -8,7 +8,7 @@ L-System is a rewriting system used mainly to model the development of plants. L
 
 ### Getting Started
 
-Add LSystemExecutor to a game object in your scene. Set a L-System definition (i.e.: "Assets/Defs/3D Tree 1.txt") and rendering properties. Start the game.
+Add LSystemExecutor to a game object in your scene. Set a L-System definition (e.g., "Assets/Defs/3D Tree 1.txt") and rendering properties. Start the game.
 
 		// 3D Tree 1.txt
 
