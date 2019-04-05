@@ -1,4 +1,4 @@
-L-Systems On Unity
+L-Systems in Unity
 ================
 
 L-System is a rewriting system used mainly to model the development of plants. L-Systems on Unity enables you to rapidly create plants for your Unity games.
@@ -19,9 +19,9 @@ Add LSystemExecutor to a game object in your scene. Set a L-System definition (e
 		F=(1)F[-&^F][^++&F]||F[--&^F][+&F]
 
 
-![LSystemExecutor in object inspector](http://www.pedroboechat.com/images/LSystemOnUnity1.png)
+![LSystemExecutor in object inspector](http://www.pedroboechat.com/images/LSystemInUnity1.png)
 
-![3D tree](http://www.pedroboechat.com/images/LSystemOnUnity2.png)
+![3D tree](http://www.pedroboechat.com/images/LSystemInUnity2.png)
 
 ----------
 
